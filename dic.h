@@ -1,8 +1,6 @@
 #ifndef DICTIONARY
 #define DICTIONARY
 
-//Я тут был
-
 #include <vector>
 #include <iostream>
 

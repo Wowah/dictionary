@@ -4,9 +4,36 @@
 #include <cstdlib>
 #include "dic.h"
 #include <typeinfo>
-#include <ios>
+#include <string>
+
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
+#include <mongocxx/client.hpp>
+#include <mongocxx/instance.hpp>
 
 using namespace std;
+
+using bsoncxx::builder::stream::close_array;
+using bsoncxx::builder::stream::close_document;
+using bsoncxx::builder::stream::document;
+using bsoncxx::builder::stream::finalize;
+using bsoncxx::builder::stream::open_array;
+using bsoncxx::builder::stream::open_document;
+
+mongocxx::instance inst{};
+
+char *
+convert(string str)
+{
+	char *ans = new char[str.size() + 1];
+	for (uint i = 0; i < str.size(); i++)
+	{
+		ans[i] = str[i];
+	}
+	ans[str.size()] = '\0';
+	return ans;
+}
 
 class add_mode
 {
@@ -29,27 +56,58 @@ public:
 
 add_mode::add_mode(const char *name) throw()
 {
-	int rate, wrd_type;
-	char *word = new char[MAX_SIZE];
-	char *eng = new char[MAX_SIZE];
-	char *rus = new char[MAX_SIZE];
+	int rate, gender;
+	bool reg;
+	char *eng, *rus;
 	dic = new Dictionary(name);
-	ifstream fin(name);
-	if (fin.is_open()) {
-		while (!fin.eof()) {
-			fin >> word >> eng >> rus >> rate;
-			if (strcmp(word,"Other")) {
-				fin >> wrd_type;
-			}
-			dic -> add_card(eng,rus,word,wrd_type);
-			dic -> set_rate(eng,rate);
-		}
-		fin.close();
-	}
-	delete []eng;
-	delete []rus;
-	delete []word;
-	
+    mongocxx::client conn{mongocxx::uri{}};
+    mongocxx::collection collection_1 = conn["dictionary"]["Other_w"];
+    mongocxx::collection collection_2 = conn["dictionary"]["Noun_w"];
+    mongocxx::collection collection_3 = conn["dictionary"]["Verb_w"];
+	auto cursor = collection_1.find({});
+	bsoncxx::document::element elem;
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		dic -> add_card(eng,rus,"Other",0);
+		dic -> set_rate(eng,rate);
+		delete []eng;
+		delete []rus;
+    }
+	cursor = collection_2.find({});
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		elem = doc["gender"];
+		gender = elem.get_int32();
+		dic -> add_card(eng,rus,"Noun",gender);
+		dic -> set_rate(eng,rate);
+		delete []eng;
+		delete []rus;
+    }
+	cursor = collection_3.find({});
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		elem = doc["regularity"];
+		reg = elem.get_bool();
+		dic -> add_card(eng,rus,"Verb",reg);
+		dic -> set_rate(eng,rate);
+		delete []eng;
+		delete []rus;
+    }
 }
 
 void
@@ -132,32 +190,59 @@ train_mode::train_mode(const char *name) throw()
 void
 train_mode::init()
 {
-	char *dic_name = dic -> get_name();
-	ifstream fin(dic_name);
-	delete []dic_name;
-	if (fin.is_open()) {
-		int rate, wrd_type;
-		char *word = new char[MAX_SIZE];
-		char *eng = new char[MAX_SIZE];
-		char *rus = new char[MAX_SIZE];
-		while (!fin.eof()) {
-			fin >> word >> eng >> rus >> rate;
-			if (strcmp(word,"Other")) {
-				fin >> wrd_type;
-			}
-			dic -> add_card(eng,rus,word,wrd_type);
-			dic -> set_rate(eng,rate);
-		}
-		if (dic -> is_empty()) {
-			throw "Error! Dictionary is empty\n";
-		}
-		fin.close();
-		dic -> clear();
-		delete []word;
+	int rate, gender;
+	bool reg;
+	char *eng, *rus;
+    mongocxx::client conn{mongocxx::uri{}};
+    mongocxx::collection collection_1 = conn["dictionary"]["Other_w"];
+    mongocxx::collection collection_2 = conn["dictionary"]["Noun_w"];
+    mongocxx::collection collection_3 = conn["dictionary"]["Verb_w"];
+	auto cursor = collection_1.find({});
+	bsoncxx::document::element elem;
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		dic -> add_card(eng,rus,"Other",0);
+		dic -> set_rate(eng,rate);
 		delete []eng;
 		delete []rus;
-	} else {
-		throw "Error! File can't be opened\n";
+    }
+	cursor = collection_2.find({});
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		elem = doc["gender"];
+		gender = elem.get_int32();
+		dic -> add_card(eng,rus,"Noun",gender);
+		dic -> set_rate(eng,rate);
+		delete []eng;
+		delete []rus;
+    }
+	cursor = collection_3.find({});
+	for (auto&& doc : cursor) {
+		elem = doc["eng"];
+		eng = convert(elem.get_utf8().value.to_string());
+		elem = doc["rus"];
+		rus = convert(elem.get_utf8().value.to_string());
+		elem = doc["rate"];
+		rate = elem.get_int32();
+		elem = doc["regularity"];
+		reg = elem.get_bool();
+		dic -> add_card(eng,rus,"Verb",reg);
+		dic -> set_rate(eng,rate);
+		delete []eng;
+		delete []rus;
+    }
+    if (dic -> is_empty()) {
+		throw "Error! Dictionary is empty\n";
 	}
 }
 
@@ -253,6 +338,7 @@ train_mode::on()
 	}
 	delete []word;
 	delete []rus;
+	delete []wrd_type;
 }
 
 train_mode::~train_mode() throw()

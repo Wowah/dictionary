@@ -7,7 +7,20 @@
 #include <typeinfo>
 #include <fstream>
 
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
+#include <mongocxx/client.hpp>
+#include <mongocxx/instance.hpp>
+
 using namespace std;
+
+using bsoncxx::builder::stream::close_array;
+using bsoncxx::builder::stream::close_document;
+using bsoncxx::builder::stream::document;
+using bsoncxx::builder::stream::finalize;
+using bsoncxx::builder::stream::open_array;
+using bsoncxx::builder::stream::open_document;
 
 ostream &
 operator<<(ostream &s, const Dictionary &a)
@@ -192,38 +205,47 @@ Dictionary::Dictionary(const Dictionary &b) throw():Dictionary(b.name) {};
 Dictionary::~Dictionary() throw()
 {
 	sort(cards.begin(),cards.end(),cmp);
-	ofstream fout;
+    mongocxx::client conn{mongocxx::uri{}};
+    mongocxx::collection collection_1 = conn["dictionary"]["Other_w"];
+    mongocxx::collection collection_2 = conn["dictionary"]["Noun_w"];
+    mongocxx::collection collection_3 = conn["dictionary"]["Verb_w"];
 	const char *typ;
-	fout.open(name);
 	vector<WordCard*>::iterator it = cards.begin();
 	while (it != cards.end()) {
 		typ = typeid(**it).name();
-		if (strcmp(typ,"8WordCard")) {
-			for (uint i = 1; i < strlen(typ); i++)
-			{
-				fout << typ[i];
-			}
-			fout << ' ';
+		if (!strcmp(typ,"8WordCard")) {
+			collection_1.update_one((document{} << "eng" << (*it) -> eng_word
+					<< "rus" << (*it) -> rus_word << finalize).view(),
+				(document{} << "$set" << open_document << "rate" << (*it) -> rate 
+					<< close_document << finalize).view(),
+				mongocxx::options::update().upsert(true));
+		} else if (!strcmp(typ,"4Noun")) {
+			collection_2.update_one((document{} << "eng" << (*it) -> eng_word
+					<< "rus" << (*it) -> rus_word << finalize).view(),
+				(document{} << "$set" << open_document << "rate" << (*it) -> rate 
+					<< "gender" << ((Noun*) (*it)) -> gender
+					<< close_document << finalize).view(),
+				mongocxx::options::update().upsert(true));
 		} else {
-			fout << "Other ";
+			collection_3.update_one((document{} << "eng" << (*it) -> eng_word
+					<< "rus" << (*it) -> rus_word << finalize).view(),
+				(document{} << "$set" << open_document << "rate" << (*it) -> rate 
+					<< "regularity" << ((Verb*) (*it)) -> reg
+					<< close_document << finalize).view(),
+				mongocxx::options::update().upsert(true));
 		}
-		fout << (*it) -> eng_word << ' ' << (*it) -> rus_word << ' ' << (*it) -> rate << ' ';
-		if (!strcmp(typ,"4Noun")) {
-			fout << ((Noun*) (*it)) -> gender;
-		}
-		if (!strcmp(typ,"4Verb")) {
-			fout << ((Verb *) (*it)) -> reg;
-		}
-		fout << endl;
 		it++;
-	} 
+	}
+	//auto cursor = collection_1.find({});
+	//for (auto&& doc : cursor) {
+        //std::cout << bsoncxx::to_json(doc) << std::endl;
+    //}
 	it = cards.begin();
 	while (it != cards.end()) {
 		delete *it;
 		it++;
 	}
 	delete []name;
-	fout.close();
 }
 
 Dictionary &
@@ -267,7 +289,6 @@ Dictionary::add_card(const char *eng, const char *rus, const char *type, int t)
 		nw = new WordCard(eng,rus);
 	}
 	cards.push_back(nw);
-	sort(cards.begin(),cards.end(),cmp);
 	return *this;
 }
 
